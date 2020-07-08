@@ -15,36 +15,35 @@ This project was for the BMIN503 Data Science Course in the Biomedical Informati
 - NHANES (https://wwwn.cdc.gov/nchs/nhanes/Default.aspx)
 ## Table of Contents
 - Introduction
-	* Overview
-	* Background
-	* Relevance to the Field
-	* Research Questions
-	* Methods/Results
-o	Import Data
-	Sample
-	Variables
-	2015-2016
-	2013-2014
-	2011-2012
-o	Data Preprocessing
-	Combine 2011-12 and 2013-14
-	Creating a new dataframe
-o	Missing Values
-	Counting Missing
-	Multiple Imputation
-o	Bivariate Analyses
-	Significan factors
-o	Linear Regression
-o	Logistic Regression
-	Results
-o	Random Forest Classifier
-	Train and test set
-	Model
-	Results
-•	Limitations
-•	Conclusions
-•	References
+  * Overview
+  * Background
+  * Relevance to the Field
+  * Research Questions
+  * Methods/Results
+  * Import Data
+  	* Sample
+  	* Variables
+  	* 2015-2016
+  	* 2013-2014
+  	* 2011-2012
+  * Data Preprocessing
+  	* Combine 2011-12 and 2013-14
+  	* Creating a new dataframe
+  * Missing Values
+  	* Counting Missing
+  	* Multiple Imputation
+  * Bivariate Analyses
+  	* Significan factors
+  * Linear Regression
+  * Logistic Regression
+  	* Results
+  * Random Forest Classifier
+  	* Train and test set
+  	* Model
+  	* Results
+- Limitations
+- Conclusions
+- References
 Author
 •	Marsha Trego, MPH
-Acknowledgments
 
