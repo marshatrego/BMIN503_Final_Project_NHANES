@@ -1,0 +1,534 @@
+---
+title: "BMIN503 Final Project Methods"
+author: "Marsha Trego"
+date: "12/7/2019"
+output:
+  html_document:
+    toc: TRUE
+    toc_float:
+      collapsed: TRUE
+      smooth_scroll: TRUE
+    depth: 3
+    theme: spacelab
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(weights)
+library(knitr)
+library(ggplot2)
+library(GGally)
+library(psych)
+library(Hmisc)
+library(naniar)
+library(dplyr)
+library(tidyverse)
+#install.packages("survey") 
+library(survey) 
+# survey package used to apply weights for survey data
+# survey::svydesign, svymean, svyglm
+#install.packages("haven")
+library(haven)
+# Haven package for reading SAS XPT file from NHANES website
+# haven::read_xpt
+library(randomForest)
+library(DataCombine)
+#install.packages("missForest")
+library(missForest)
+#install.packages("mice")
+library(mice)
+#install.packages("VIM")
+library(VIM)
+#install.packages("RNHANES")
+library(RNHANES)
+library(forcats)
+```
+
+# Introduction
+
+## Overview
+
+This project is a secondary analysis of NHANES data to characterize and model demographic and dietary factors to predict undiagnosed type II diabetes mellitus among United States Adults. 
+
+## Background 
+
+Type II diabetes mellitus (T2D) is an endocrine disorder characterized by the body’s inability or reduced ability to metabolize carbohydrates due to impaired insulin response. The prevalence of T2D has increased since the 1990s from around 7% to 12.3% in 2011-2014, mirroring the trend in rising obesity rates (1). Undiagnosed diabetes Mellitus (UDM) occurs in the asymptomatic phase of type 2 diabetes. UDM can have serious ocular, renal, and cardiovascular complications that occur before treatment can occur. In addition to health complications, each case of UDM was estimated to cost \$4,030 in 2012, contributing to the total \$322 billion cost of diagnosed, undiagnosed, gestational, and prediabetes int he United STates at that time (2). In 2017, the CDC estimated there were 7.2 million cases of UDM (3). Effective management of the condition can help alleviate both direct and indirect costs and reduce associated comorbidity. The ability to diagnose diabetes among the undiagnosed is an important step towards reducing the national burden of diabetes. 
+
+NHANES is a United States nationally representative survey designed to assess nutritional status of the United States civilian, noninstitutionalized population (4). NHANES is a comprehensive survey, including physical examinations, laboratory analyses, questionnaires, and demographic information, and representativeness of the population including minority and underrepresented groups are ensured with weighting and sampling methods (5). NHANES provides a comprehensive database of factors that could affect health and diabetes, specifically, including dietary recalls and HbA1c laboratory results. Because type 2 diabetes and UDM are affected by a multitude of lifestyle and medical factors, including diet, genetics, and demographics, NHANES provides a useful tool for exploring the relationship between these factors. Kavakiotis et al. (6), in their systematic review of machine learning and data mining techniques in diabetes research, describe the hope that machine learning of NHANES data and similar data sources could be linked to decision-making support tools in diagnosis and treatment of diabetes. Their 2017 review included one analysis of NHANES data by Lee and Giraud-Carrier (2013), in which the researchers applied association rule mining and clustering algorithms to explore relationships between responses to health questionnaires and diabetes and hypertension in NHANES. Given the burden of UDM in the United States, this project will explore factors within the NHANES dataset which predict UDM as assessed by HbA1c level to create a low-cost way to identify those at risk.
+
+## Relevance to the Field
+
+This project applies principles of biomedical informatics to address the population-level health issue of UDM. It incorporates machine learning techniques to explore an integration of medical and social determinants of health that can be achieved through the comprehensive NHANES database. This topic has the potential to inform clinical practitioners and regional and national policy makers as to potential areas to focus resources. I have met with Dr. Christina Roberto, Dr. Laura Gibson, and Helen Yan. These advisors recommended narrowing my topic to a more specific issue and to frame the issue as exploratory since the cross-sectional data is week for inferring causality, as well as using imputation to fill in missing data. 
+
+# Research Questions
+
+* Which demographic factors are most strongly associated with UDM? 
+* Which dietary factors are most strongly associated with UDM?
+* Can we predict undiagnosed diabetes from non-clinical factors, with the goal of screening for those most at risk in community settings? 
+
+# Methods/Results
+
+
+
+## Step 1: Import Data
+
+### Sample
+
+Sample restricted to nonpregnant adults age 20-79 with no past diagnosis of diabetes by a health professional
+
+### Variables
+
+* NHANES Modules Demographics, Medical Screener Questionnaire, Examination, Laboratory, Dietary
+
+* diabetes (DIQ) - doctor told you have diabetes (DIQ010) (1=yes, 2=no, 3=borderline, 7=ref, 9=dk)
+* hba1c (GHB) - glycohemoglobin (%) (LBXGH) (rage of values) 
++ reformatted into a binary outcome of >6.5 or less than 6.5 HbA1c to denote UDM and not UDM among the undiagnosed population
+* demographic (DEMO) - 
++ age (RIDAGEYR) (continuous), 
++ sex (RIAGENDR) (male,female,missing), 
++ race/eth (RIDRETH3) (mex american, other hispanic, nh white, nh black, nh asian, other/multi), 
++ education (DMDEDUC2) (less than 9th [1], 9-11th [2], highschool/ged [3], somecollege/aa [4], college or above [5], ref [7], dk[9]), 
++ marital status (DMDMARTL) (married [1], widowed [2], divorced [3], separated [4], never married [5], living wpartner [6], ref [77], dk [99]), 
++ poverty-income ration (PIR) (INDFMPIR) (range of values 0-4.99, 5), 
++ pregnancy status (RIDEXPRG) (1=yes, 2 or 3=no), total number of people in household (DMDHHSIZ) (values 1-7 or more)
+* medical condition screener (MCQ) - 
++ are you now controlling or losing weight (MCA370a) (1=yes, 2=no, 7=ref, 9=dk), 
++ are you now increasing exercise (MCA370b) (1=yes, 2=no, 8=ref, 9=dk)
+* alcohol use (ALQ) - how often drank alcohol over past 12 months (ALQ120Q)
+* smoking (SMQ) - do you now smoke cigarettes (SMA040) (1=everyday, 2=some days, 3=not at all, 7=ref, 9=dk)
+* dietary behavior (DBQ) - how healthy is the diet (DBQ&)) (1=excellent, 2=very good, 3=good, 4=fair, 5=poor, 7=ref, 9dk), 
+* health insurance (HIQ) - covered by any health insuranc (HIQ011) (1=yes, 2=no, 7=ref, 9=dk)
+* food security (FSQ) - 
++ Currently receive snap benefits (FSD230) (1=yes, 2=no, 7=ref, 9=dk), 
++ adult food security (FSDAD) (1=full security, 2=marginal, 3=low, 4=very low)
+* body measurement (BMX) - BMI (BMXBMI) (range of valuess)
+* blood pressure measurement (BMP) - systolic (BPXSY1) (range of values), diastolic (BPXDI1) (range of values)
+* nutrient intake day 1 (DR1TOT)
+* nutrient intake day 2 (DR2TOT) 
+
+### 2015-2016
+
+* 2015-2016 excluded because food security data not available in these years. 
+
+### 2013-2014
+ 
+```{r eval=TRUE, message=FALSE, warning=FALSE}
+nhanesDemo14 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/DEMO_H.XPT")) #demographic
+nhanesDIQ14 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/DIQ_H.XPT")) #diabetes
+nhanesMSQ14 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/MCQ_H.XPT")) #medical condition screener
+nhanesALQ14 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/ALQ_H.XPT")) #alcohol use
+nhanesSMQ14 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/SMQ_H.XPT")) #smoking
+nhanesDBQ14 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/DBQ_H.XPT")) #dietary behavior
+nhanesHIQ14 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/HIQ_H.XPT")) #health insurance
+nhanesFSQ14 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/FSQ_H.XPT")) #food security
+nhanesExam14Body <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/BMX_H.XPT")) #body measurements
+nhanesExam14BP <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/BPX_H.XPT")) #blood pressure
+nhanesLab14HBA1C <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/GHB_H.XPT")) #HbA1c
+nhanesNutrient141 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/DR1TOT_H.XPT")) #nutrient data day 1
+nhanesNutrient142 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2013-2014/DR2TOT_H.XPT")) #nutrient data day 2
+nhanesData14 <- inner_join(nhanesLab14HBA1C, nhanesDemo14, by= "SEQN")
+nhanesData14 <- inner_join(nhanesData14, nhanesDIQ14, by="SEQN")
+nhanesData14 <- inner_join(nhanesData14, nhanesMSQ14, by="SEQN")
+nhanesData14 <- inner_join(nhanesData14, nhanesALQ14, by="SEQN")
+nhanesData14 <- inner_join(nhanesData14, nhanesSMQ14, by="SEQN")
+nhanesData14 <- inner_join(nhanesData14, nhanesDBQ14, by="SEQN")
+nhanesData14 <- inner_join(nhanesData14, nhanesHIQ14, by="SEQN")
+nhanesData14 <- inner_join(nhanesData14, nhanesFSQ14, by="SEQN")
+nhanesData14 <- inner_join(nhanesData14, nhanesExam14Body, by="SEQN")
+nhanesData14 <- inner_join(nhanesData14, nhanesExam14BP, by="SEQN")
+nhanesData14 <- inner_join(nhanesData14, nhanesNutrient141, by="SEQN")
+nhanesData14 <- inner_join(nhanesData14, nhanesNutrient142, by="SEQN")
+#nhanesData14 <- nhanesData14[!duplicated(nhanesData14$SEQN), ] #removing duplicate IDs created by joining
+#rm(list = c("nhanesData14"))
+```
+
+### 2011-2012
+
+```{r eval=TRUE, message=FALSE, warning=FALSE}
+nhanesDemo12 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/DEMO_G.XPT")) #demographic
+nhanesDIQ12 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/DIQ_G.XPT")) #diabetes
+nhanesMSQ12 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/MCQ_G.XPT")) #medical condition screener
+nhanesALQ12 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/ALQ_G.XPT")) #alcohol use
+nhanesSMQ12 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/SMQ_G.XPT")) #smoking
+nhanesDBQ12 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/DBQ_G.XPT")) #dietary behavior
+nhanesHIQ12 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/HIQ_G.XPT")) #health insurance
+nhanesFSQ12 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/FSQ_G.XPT")) #food security
+nhanesExam12Body <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/BMX_G.XPT")) #body measurements
+nhanesExam12BP <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/BPX_G.XPT")) #blood pressure
+nhanesLab12HBA1C <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/GHB_G.XPT")) #HbA1c
+nhanesNutrient121 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/DR1TOT_G.XPT")) #nutrient data day 1
+nhanesNutrient122 <- read_xpt(url("https://wwwn.cdc.gov/Nchs/Nhanes/2011-2012/DR2TOT_G.XPT")) #nutrient data day 2
+nhanesData12 <- inner_join(nhanesLab12HBA1C, nhanesDemo12, by= "SEQN")
+nhanesData12 <- inner_join(nhanesData12, nhanesDIQ12, by="SEQN")
+nhanesData12 <- inner_join(nhanesData12, nhanesMSQ12, by="SEQN")
+nhanesData12 <- inner_join(nhanesData12, nhanesALQ12, by="SEQN")
+nhanesData12 <- inner_join(nhanesData12, nhanesSMQ12, by="SEQN")
+nhanesData12 <- inner_join(nhanesData12, nhanesDBQ12, by="SEQN")
+nhanesData12 <- inner_join(nhanesData12, nhanesHIQ12, by="SEQN")
+nhanesData12 <- inner_join(nhanesData12, nhanesFSQ12, by="SEQN")
+nhanesData12 <- inner_join(nhanesData12, nhanesExam12Body, by="SEQN")
+nhanesData12 <- inner_join(nhanesData12, nhanesExam12BP, by="SEQN")
+nhanesData12 <- inner_join(nhanesData12, nhanesNutrient121, by="SEQN")
+nhanesData12 <- inner_join(nhanesData12, nhanesNutrient122, by="SEQN")
+#nhanesData12 <- nhanesData12[!duplicated(nhanesData12$SEQN), ] #removing duplicate IDs created by joining
+#rm(list = c("nhanesData14Subset"))
+```
+
+## Data Preprocessing
+
+### Combine 2011-12 and 2013-14 
+
+* Using full_join to keep rows
+
+```{r eval=TRUE, message=FALSE, warning=FALSE}
+nhanesData <- full_join(nhanesData12, nhanesData14)
+```
+
+### Creating a new dataframe with just the desired variables
+
+```{r eval=TRUE, message=FALSE, warning=FALSE}
+#rm(list = c("nhanesDataFull"))
+nhanesDataFull <- nhanesData %>%
+    select(id=SEQN, 
+           weightQ2Yr= WTINT2YR,
+           weightE2Yr= WTMEC2YR,
+           hba1cLevel=LBXGH,
+           age=RIDAGEYR, 
+           gender=RIAGENDR,
+           race=RIDRETH3, 
+           education=DMDEDUC2, 
+           marital=DMDMARTL,
+           PIR=INDFMPIR,
+           pregnant=RIDEXPRG,
+           #diabetes
+           diagnosed=DIQ010,
+           famHistory=DIQ175A,
+           #med conditions
+           controlWeight=MCQ370A,
+           increaseExercise=MCQ370B,
+           #alcohol
+           alcohol=ALQ120Q,
+           #smoking
+           smoke=SMQ040,
+           #dietary behavior
+           diet=DBQ700,
+           #health insurance
+           insurance=HIQ011,
+           #food security
+           snapCurrent=FSD230,
+           foodSecure=FSDAD,
+           #body measurement
+           bmi=BMXBMI,
+           #blood pressure,
+           systolic=BPXSY1,
+           diastolic=BPXDI1) %>%
+  mutate(totKcal1=nhanesData$DR1TKCAL,
+         totKcal2= nhanesData$DR2TKCAL,
+           totProt1=nhanesData$DR1TPROT,
+         totProt2=nhanesData$DR2TPROT,
+           totCarb1=nhanesData$DR1TCARB,
+         totCarb2=nhanesData$DR2TCARB,
+           totSugr1=nhanesData$DR1TSUGR,
+         totSugr2=nhanesData$DR2TSUGR,
+           totFibe1=nhanesData$DR1TFIBE,
+         totFibe2=nhanesData$DR2TFIBE,
+           totFat1=nhanesData$DR1TTFAT,
+         totFat2=nhanesData$DR2TTFAT)
+nhanesDataFull <- nhanesDataFull %>%
+  filter(age >19) %>%
+  filter(age <80)
+nhanesDataFull <- nhanesDataFull %>%
+  filter(pregnant != 1 | is.na(nhanesDataFull$pregnant==TRUE)) 
+  
+nhanesDataFull <- nhanesDataFull %>%
+  filter(alcohol<700) #filtering less than 700 because 777 and 999 are refused and don't know
+nhanesDataFull <- nhanesDataFull %>%
+  mutate(ageCut=cut(nhanesDataFull$age, c(20,30,40,50,60,70,81))) %>%
+  mutate(gender=factor(gender, levels=c(1, 2), labels=c("male", "female"))) %>%
+  mutate(race=factor(race, levels=c(3, 4, 1, 6, 2, 7), labels=c("white", "black", "MexA", "Asian", "Hispanic", "other"))) %>%
+  mutate(marital=factor(marital, levels=c(1,2,3,4,5,6,77,99), labels=c("partnered", "notPartnered", "notPartnered", "notPartnered","notPartnered", "partnered", "notPartnered", "notPartnered"))) %>%
+  mutate(education=factor(education, levels=c(1,2,3,4,5), labels=c("lesshigh", "lesshigh", "high", "somecollege", "college"))) %>%
+  
+  mutate(bmiCut=cut(bmi, c(0, 25, 30, 100), labels=c("0-25", "25-30", "30+"))) %>%
+  mutate(controlWeight=factor(controlWeight, levels=c(1,2,7,9), labels=c("yes", "no", "no", "no"))) %>%
+  mutate(increaseExercise=factor(increaseExercise, levels=c(1,2,7,9), labels=c("yes", "no", "no", "no"))) %>%
+  mutate(smoke=factor(smoke, levels=c(1,2,3,7,9), labels=c("yes", "yes", "no", "no", "no"))) %>%
+  mutate(diet=factor(diet, levels=c(1,2,3,4,5), labels=c("excellent", "verygood", "good", "fair", "poor"))) %>%
+  mutate(insurance=factor(insurance, levels=c(1,2,7,9), labels=c("yes", "no", "no", "no"))) %>%
+  mutate(foodSecure=factor(foodSecure, levels=c(1,2,3,4), labels=c("full", "marginal", "low", "verylow"))) %>%
+  mutate(snapCurrent=factor(snapCurrent, levels=c(1,2,7,9), labels=c("yes", "no", "no", "no"))) %>% 
+  mutate(PIR=cut(PIR, c(0,1,1.33, 1.5, 1.85, 5.1), labels=c("0-1", "1-1.32", "1.33-1.49", "1.5-1.84", "1.85-5.0"))) %>%
+  mutate(diagnosedCode = factor(diagnosed, levels=c(1,2,3), labels=c("yes", "no", "borderline"))) 
+nhanesDataFull <- nhanesDataFull %>%
+  mutate(hba1cCutoff = ifelse(hba1cLevel<6.5, 1, 0))
+nhanesDataFull <- subset(nhanesDataFull, select=-c(pregnant)) #dropping pregnant and diagnosed because only used to filter
+#nhanesDataFull <- subset(nhanesDataFull, select=-c(weightQ2Yr)) #dropping the weights until I can figure out how to apply them to the models
+#nhanesDataFull <- subset(nhanesDataFull, select=-c(weightE2Yr))
+wpct(nhanesDataFull$diagnosedCode, nhanesDataFull$hba1cCutoff)
+wtd.table(nhanesDataFull$diagnosedCode, weights=nhanesDataFull$weightE2Yr, na.rm=TRUE)
+wpct(nhanesDataFull$diagnosedCode, weight=nhanesDataFull$weightE2Yr)
+nhanesDataFull <- nhanesDataFull %>%
+  filter(diagnosed==2) #filtering to only those who have NOT been diagnosed with diabetes
+nhanesDataFull <- subset(nhanesDataFull, select=-c(diagnosed))
+```
+
+### Sample Summary
+
+12% of the sample (unweighted) had a diagnosis of diabetes. Of the 85% with no diagnosis, 2% had HbA1c levels above 6.5, which corresponds to about 6.5 million people.
+
+
+### Frequency tables
+
+```{r eval=TRUE, message = FALSE}
+head(nhanesDataFull)
+summary(nhanesDataFull$age)
+table(nhanesDataFull$agecut)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$gender)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$race)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$education)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$marital)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$PIR)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$controlWeight)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$increaseExercise)
+summary(nhanesDataFull$alcohol)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$smoke)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$diet)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$insurance)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$snapCurrent)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$foodSecure)
+summary(nhanesDataFull$bmi)
+table(nhanesDataFull$hba1cCutoff, nhanesDataFull$bmiCut)
+summary(nhanesDataFull$systolic)
+summary(nhanesDataFull$diastolic)
+summary(nhanesDataFull$totKcal1)
+summary(nhanesDataFull$totProt1)
+summary(nhanesDataFull$totCarb1)
+summary(nhanesDataFull$totSugr1)
+summary(nhanesDataFull$totFibe1)
+summary(nhanesDataFull$totFat1)
+table(nhanesDataFull$hba1cCutoff)
+```
+
+## Missing Values
+
+### Counting missing
+
+* Used logic and survey design to relabel some missing values that should be "no" (e.g. participants who answered "no" to a prior questions were not asked the smoking question used for this variable, so were labeled as "no" for this question)
+
+```{r eval=TRUE, message = FALSE}
+#percent missing for each variable
+p <- function(x) {sum(is.na(x))/length(x)*100}
+pmissing <- apply(nhanesDataFull,2,p)
+pmissing
+#76% missing from snapCurrent, so changing missing to "no" because missing are filtered from previous question asing if they recieved snap benefits in past 12 months. 12 mo not used because vars are different between 11-12 and 13-14. prior question was "ever received" and people who said no were excluded from currently receive. 
+nhanesDataFull$snapCurrent <- fct_explicit_na(nhanesDataFull$snapCurrent, na_level = "no")
+#41.8% of smoking missing, but coding missing to "no" because prior question asks "smoked at least 100 cigarettes in life" and if answer is no/ref/dk, skip to end of questionnaire. Missing values for this question, "do you now smoke cigarettes" are skipped questions due to no cigarette use.
+nhanesDataFull$smoke <- fct_explicit_na(nhanesDataFull$smoke, na_level = "no")
+pmissing <- apply(nhanesDataFull,2,p)
+pmissing
+md.pattern(nhanesDataFull)
+#md.pairs(nhanesDataFull)
+```
+
+### Multiple imputation
+
+* Used mice function to impute missing data values
+
+```{r eval=TRUE, message=FALSE}
+#impute <- mice(nhanesDataFull[,2:34], m=5, seed=619)
+#stripplot(impute, pch=20, cex=1.2)
+```
+
+* Imputation gave 5 datasets. 
+* Although the regressions should be done on all 5 individually then averaged, for this project, bivariate analyses were done on the first dataset and regression and random forest models were done on the combined 5 datasets
+
+```{r eval=TRUE, message=FALSE}
+impute1 <- mice::complete(impute, 1)
+impute2 <- mice::complete(impute, 2)
+impute3 <- mice::complete(impute, 3)
+impute4 <- mice::complete(impute, 4)
+impute5 <- mice::complete(impute, 5)
+imputeLong <- mice::complete(impute, "long", inc=FALSE)
+imputeLong <- subset(imputeLong, select=-c(.imp))
+imputeLong <- subset(imputeLong, select=-c(.id))
+impute1 <- impute1 %>%
+  mutate(hba1cCutoff = ifelse(hba1cLevel<6.5, 0, 1)) %>%
+  mutate(totKcal=(totKcal1+totKcal2)/2) %>%
+  mutate(totProt=(totProt1 + totProt2)/2) %>%
+  mutate(totCarb=(totCarb1+totCarb2)/2) %>%
+  mutate(totSugr=(totSugr1+totSugr2)/2) %>%
+  mutate(totFibe=(totFibe1+totFibe2)/2) %>%
+  mutate(totFat=(totFat1+totFat2)/2)
+imputeLong <- imputeLong %>%
+  mutate(hba1cCutoff = ifelse(hba1cLevel<6.5, 0, 1))  %>%
+  mutate(totKcal=(totKcal1+totKcal2)/2) %>%
+  mutate(totProt=(totProt1 + totProt2)/2) %>%
+  mutate(totCarb=(totCarb1+totCarb2)/2) %>%
+  mutate(totSugr=(totSugr1+totSugr2)/2) %>%
+  mutate(totFibe=(totFibe1+totFibe2)/2) %>%
+  mutate(totFat=(totFat1+totFat2)/2)
+impute1 <- impute1 %>%
+  mutate(hba1cCutoffFactor = factor(hba1cCutoff, levels=c("0","1"), labels=c("no", "yes"))) 
+#"no" = no undiagnosed diabetes (<6.5), "yes" = undiagnosed diabetes (>6.5)
+imputeLong <- imputeLong %>%
+  mutate(hba1cCutoffFactor = factor(hba1cCutoff, levels=c("0","1"), labels=c("no", "yes"))) 
+#table(imputeLong$hba1cCutoff)
+```
+
+## Bivariate Analyses
+
+* Chi square test and ANOVA conducted on categorical and continuous variables, respectively. 
+* Bivariate analyses were conducted to identify signifcant factors to then use in regression and radom forest models
+* Significant in bivariate analyses: age + race + education + PIR + bmi + insurance + foodSecure + totKcal + totProt + totCarb + totSugr + totFat + diet
+
+### Factors significant in Bivariate Analysis: 
+
+Demographic Factors
+* Age – (p<0.001)
+* Race - 4% of undiagnosed adults who were non-Hispanic Black or Other Hispanic had high HbA1c Levels (p<0.001)
+* Education - (p<0.001)
+* Income -  between 133-149% of the poverty line had the highest proportion of high HbA1c levels (5%), compared to 2% among those with the incomes below the poverty line (p<0.001)
+* Not significant - Gender, marital status
+
+Dietary Factors
+* BMI – 5% of adults with no diabetes diagnosis and a BMI over 30 had HbA1c Levels over 6.5 compared to 1% of adults with BMI <25 (p<0.001)
+* Food Security – 4% of undiagnosed adults with very low food security had high HbA1c Levels (p<0.001)
+* Diet quality – worse self rated diet quality associated with greater HbA1c (p=0.011)
+* Alcohol consumption (p=0.004)
+* Total calorie intake (p=0.014)
+* Total carbohydrate intake (p=0.029)
+* Not significant – protein, fiber, fat, smoking, 
+
+
+```{r eval=TRUE, message=FALSE, warning=FALSE}
+#chisqAgeCut <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$ageCut, weight=imputeLong$weightE2Yr)}
+chisqAge <- summary(aov(age ~ hba1cCutoff, data=impute1))
+chisqGender <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$gender, weight=impute1$weightE2Yr)}
+chisqRace <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$race, weight=impute1$weightE2Yr)}
+chisqEd <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$education, weight=impute1$weightE2Yr)}
+chisqPir <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$PIR, weight=impute1$weightE2Yr)}
+chisqBmi <- summary(aov(bmi ~ hba1cCutoff, data=imputeLong))
+chisqFamHist <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$famHist, weight=impute1$weightE2Yr)}
+chisqInsurance <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$insurance, weight=impute1$weightE2Yr)}
+chisqMar <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$marital, weight=impute1$weightE2Yr)}
+chisqFood <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$foodSecure, weight=impute1$weightE2Yr)}
+chisqSmoke <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$smoke, weight=impute1$weightE2Yr)}
+chisqAlcohol <- summary(aov(alcohol ~ hba1cCutoff, data=imputeLong))
+chisqDiet <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$diet, weight=impute1$weightE2Yr)}
+chisqSnap <- {weights::wtd.chi.sq(impute1$hba1cCutoff, impute1$snapCurrent, weight=impute1$weightE2Yr)}
+#Nutrient factors
+chisqKcal <- summary(aov(totKcal ~ hba1cCutoff, data=impute1))
+chisqProt <- summary(aov(totProt ~ hba1cCutoff, data=impute1))
+chisqCarb <- summary(aov(totCarb ~ hba1cCutoff, data=impute1))
+chisqSugr <- summary(aov(totSugr ~ hba1cCutoff, data=impute1))
+chisqFibe <- summary(aov(totFibe ~ hba1cCutoff, data=impute1))
+chisqFat <-  summary(aov(totFat ~ hba1cCutoff, data=impute1))
+```
+
+
+## Linear Regression
+
+* testing out linear regression, but decided not to include
+
+```{r eval=TRUE, message=FALSE, warning=FALSE}
+nhanesLm1 <- lm(data=impute1, hba1cLevel ~ age + race + education + PIR + bmi + insurance + foodSecure + totKcal + totProt + totCarb + totSugr + totFat + diet)
+summary(nhanesLm1)
+```
+
+## Logistic Regression
+
+* Logistic regression conducted with HbA1c above or below 6.5 as the outcome and features in the model were: age, race, education, PIR, bmi, insurance,  foodSecure,  totKcal,  totProt,  totCarb,  totSugr,  totFat,  diet. 
+
+### Results of Logistic REgression
+
+* Older Age was significantly associated with greater odds of UDM (OR=1.05, 95% confidence interval [CI]=1.05, 1.07) 
+* Race/ethnicity being non-white was significantly associated with greater odds of UDM.
+* Income of 100-132% of poverty line was most strongly associated with UDM (OR=1.73, CI=1.05, 2.93)
+* Higher BMI associated with greater likelihood of UDM (OR=1.09, CI=1.07, 1.11)
+* Compared to "Excellent" diet quality, diet quality rated as "Good" or "Fair" associated with highest odds of UDM (OR=2.28, CI=0.58, 3.10 and OR=2.33, CI=0.99, 4.53, respectively).
+
+
+```{r eval=TRUE, message=FALSE, warning=FALSE}
+#checking hba1ccutoff variable and found it was character
+summary(impute1$hba1cCutoff)
+class(impute1$hba1cCutoff)
+options(scipen=999) #prevents ORs from being in scientific notation. 999 sets a high threshold for R to use scientific notation
+#logistic regression
+nhanesGlm <- glm(impute1$hba1cCutoffFactor ~ age + race + education + PIR + bmi + insurance + foodSecure + totKcal + totProt + totCarb + totSugr + totFat + diet, data = impute1, family = binomial(logit))
+summary(nhanesGlm)
+exp(cbind(OR = coef(nhanesGlm), confint(nhanesGlm)))
+#box plot above vs below bmi
+ggplot(data = impute1, aes(x = factor(hba1cCutoffFactor), y = age)) +
+  geom_boxplot() +
+  labs(title = "above/below Status by variable age") +
+  labs(x = "hba1c")
+#box plot above vs below age
+ggplot(data = impute1, aes(x = factor(hba1cCutoffFactor), y = bmi)) +
+  geom_boxplot() +
+  labs(title = "above/below Status by variable bmi") +
+  labs(x = "hba1c")
+```
+
+## Random forest classifier
+
+### Train and Test Set
+
+* Using the data set with all 5 multiple imputations (imputeLong) to increase n
+
+```{r eval=TRUE, message=FALSE, warning=FALSE}
+# Split into Train and Validation sets
+# Training Set : Validation Set = 70 : 30 (random)
+set.seed(619)
+train <- sample(nrow(imputeLong), 0.7*nrow(imputeLong), replace = FALSE)
+trainSet <- imputeLong[train,]
+testSet <- imputeLong[-train,]
+#summary(TrainSet)
+#summary(ValidSet)
+```
+
+### Model
+
+* Features significant in bivariate analyses were included in random forest model (same as logistic regression model)
+* model was trained on 70% of data then tested on 30% 
+* 0.55% OOB error estimate
+* Imbalanced classes
+
+### Results of Random Forest
+
+* Age and BMI stand out as the most important factors in the model, followed by race
+* Correlation with logistic regression model shows robustness in analysis
+* 0.55% error in OOB
++  Although OOB error of .55% seems small, should be considered with caution given highly imbalanced classes (98%/2%) making it challenging to train the model.
+
+
+```{r eval=TRUE, message=FALSE, warning=FALSE}
+#factors significant in bivariate analysis
+nhanesRF <- randomForest(hba1cCutoffFactor ~ age + race + education + PIR + bmi + insurance + foodSecure + totKcal + totProt + totCarb + totSugr + totFat + diet, data = trainSet, importance = TRUE)
+nhanesRF
+nhanesRF$importance
+# Predicting on Validation set
+nhanesRFPrediction <- predict(nhanesRF, testSet, type = "class")
+table(nhanesRFPrediction)
+# Checking classification accuracy
+mean(nhanesRFPrediction == testSet$hba1cCutoffFactor)
+table(nhanesRFPrediction, testSet$hba1cCutoffFactor)
+```
+
+# Limitations
+
+The NHANES data only measures HbA1c and glucose (not included in this study) once. However, some studies indicate that confirmatory testing may be required to prevent over-estimation of UDM in the population (i.e. a single test may be an anomoloy) (7). Furthermore, as is always the case when working with NHANES data, the data are cross-sectional, thus no causal inference can be made without temporality. Self-reported data may be unreliable, including self-reported diabetes diagnosis and 24-hour dietary recalls. Specifically with dietary recall data, social-desireability bias may play an important role. These data lacked information about the geographical distribution of the cases. Prior research indicates that geographical region plays an important role in the diabetes epidemic. Yet, location information is restricted in this databases for protection of the participants, and is only accessible with an application to NHANES, which is beyond the scope of this project. Finally, with the models, the data had imbalanced classes for the semi-rare event of UDM (about 2% of the undiagnosed sample), which may make models unreliable without adjusting for imbalance. Adjustment for imbalanced was not done in this project.
+
+# Conclusions
+
+Ultimately, this project found that older age and higher body mass index were the strongest predictors of UDM in both logistic regression and random forest models. Diet did not directly predict uncontrolled glucose levels, although obesity (resulting from a combination of diet, genetics, and other lifestyle factors) did. Those with incomes that were low yet above the poverty line may be more at risk for UDM. This somewhat surprising finding could be due to differences access to social wellfare programs, such as Medicaid between those below and above the poverty line. Althoug health insurance was included in the dataset, it was not separated into distinct types of insurance, and thus, may have been to blunt to show this nuance. Programs screening for undiagnosed diabetes may consider focusing on older, overweight/obese adults with incomes above the poverty line. Further research should refine the model to include weighting for nationally representativeness of the data, as well as include a more nuanced factor for health insurance. 
+
+# References
+
+1. Stokes, A., & Preston, S. H. (2017). The contribution of rising adiposity to the increasing prevalence of diabetes in the United States. Preventive Medicine, 101, 91-95. doi:https://doi.org/10.1016/j.ypmed.2017.05.031
+2. Dall TM, Yang W, Halder P, Pang B, Massoudi M, Wintfeld N et al. The Economic Burden of Elevated Blood Glucose Levels in 2012: Diagnosed and Undiagnosed Diabetes, Gestational Diabetes Mellitus, and Prediabetes. Diabetes Care. 2014;37(12):3172-9. doi:10.2337/dc14-1036.
+3. Centers for Disease Control and Prevention. National Diabetes Statistics Report, 2017. Atlanta, GA: Centers for Disease Control and Prevention, US Department of Health and Human Services; 2017.
+4. US Centers for Disease Control and Prevention, & National Center for Health Statistics. (2014). National health and nutrition examination survey (NHANES) data. In. https://wwwn.cdc.gov/nchs/nhanes/Default.aspx: U.S. Department of Health and Human Services.
+5. Johnson, C. L., Dohrmann, S. M., Burt, V. L., & Mohadjer, L. K. (2014). National Health and Nutrition Examination Survey: Sample design, 2011–2014. Vital Health Statistics, Series 2(162), 1-33. 
+6. Kavakiotis, I., Tsave, O., Salifoglou, A., Maglaveras, N., Vlahavas, I., & Chouvarda, I. (2017). Machine Learning and Data Mining Methods in Diabetes Research. Computational and Structural Biotechnology Journal, 15, 104-116. doi:https://doi.org/10.1016/j.csbj.2016.12.005
+7. Geiss LS, Bullard KM, Brinks R, Gregg EW. Considerations in Epidemiologic Definitions of Undiagnosed Diabetes. Diabetes Care. 2018;41(9):1835-8. doi:10.2337/dc17-1838.
