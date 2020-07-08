@@ -1,7 +1,11 @@
 # BMIN503_Final_Project
 
 # Project Title: Exploring Undiagnosed Diabetes in United States Adults
-This project was for the BMIN503 Data Science Course in the Biomedical Informatics Program at the University of Pennsylvania. This project is a secondary analysis of NHANES data to characterize and model demographic and dietary factors to predict undiagnosed type II diabetes mellitus among United States Adults. I addressed the folowing research questions:
+This project was for the BMIN503 Data Science Course in the Biomedical Informatics Program at the University of Pennsylvania. This project is a secondary analysis of NHANES data to characterize and model demographic and dietary factors to predict undiagnosed type II diabetes mellitus among United States Adults. 
+
+HTM with R Markdown Version of this project available here: [BMIN503_Final_Project_TREGO.html](BMIN503_Final_Project_TREGO.html)
+
+I addressed the folowing research questions:
 - Which demographic factors are most strongly associated with UDM?
 - Which dietary factors are most strongly associated with UDM?
 - Can we predict undiagnosed diabetes from non-clinical factors, with the goal of screening for those most at risk in community settings?
